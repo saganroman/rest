@@ -15,7 +15,7 @@ class LocationController extends Controller
 
 	public function getRegions()
 	{
-		return response()->json(Region::all(), 201);
+		return response()->json(Region::all());
 	}
 	public function getLocationByRegionId($id)
 	{
