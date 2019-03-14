@@ -19,8 +19,8 @@ class CreateLocationsTable extends Migration
 			$table->decimal('lat', 10, 6);
 			$table->smallInteger('city_id');
 			$table->smallInteger('region_id');
-//			$table->foreign('city_id')->references('id')->on('cities');
-//			$table->foreign('region_id')->references('id')->on('regions');
+			$table->string('full_address');
+			$table->timestamps();
 		});
 	}
 

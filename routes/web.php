@@ -1,5 +1,3 @@
 <?php
 
-
-Route::get('/regions','LocationController@getRegions');
-Route::get('/regions/{id}','LocationController@getLocationByRegionId');
+Route::get('/regions/{id?}','LocationController@getRegions');
