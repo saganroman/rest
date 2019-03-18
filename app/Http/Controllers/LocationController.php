@@ -11,11 +11,17 @@ use Jcf\Geocode\Geocode;
 
 class LocationController extends Controller
 {
-	const REGION_INGEX = 5;
-	const CITY_INDEX = 3;
-	const STREET_INDEX = 1;
-	const BUILDING_NUMBER_INDEX = 0;
-	const RESPONSE_STATUSES = ['OK' => 200, 'CREATED' => 201, 'BAD_REQUEST' => 400];
+	const STREET_INDEX = "route";
+	const BUILDING_NUMBER_INDEX = "street_number";
+	const CITY_INDEX = "locality political";
+	const REGION_INGEX = "administrative_area_level_1 political";
+	const RESPONSE_STATUSES = ['OK' => 200, 'CREATED' => 201, 'BAD_REQUEST' => 400, 'NOT_FOUND' => 404];
+
+	const REGION_DOES_NOT_EXISTS_ERROR_MESSEGE = 'Responce from google service does not containt region';
+	const CITY_DOES_NOT_EXISTS_ERROR_MESSEGE = 'Responce from google service does not containt city';
+	const STREET_DOES_NOT_EXISTS_ERROR_MESSEGE = 'Responce from google service does not containt street';
+	const BUIILDING_NUMBER_DOES_NOT_EXISTS_ERROR_MESSEGE = 'Responce from google service does not containt building number';
+	const RESPONCE_DOES_NOT_EXISTS_ERROR_MESSEGE = 'Google service does not responded';
 
 	public function getRegions($id = null)
 	{
@@ -36,9 +42,28 @@ class LocationController extends Controller
 			$lng = $params['lng'];
 			$locationExists = Location::where('lat', $lat)->where('lng', $lng)->first();
 			if (!$locationExists) {
-				$response = Geocode::make()->latLng($lat, $lng);
-				$regionName = $response->raw()->address_components[self::REGION_INGEX]->long_name;
-				$cityName = $response->raw()->address_components[self::CITY_INDEX]->long_name;
+				try {
+					$response = Geocode::make()->latLng($lat, $lng);
+				} catch (\Exception $e) {
+					return response()->json($e->getMessage(), $e->getCode());
+					exit;
+				}
+				if (!$response) {
+					return response()->json(self::RESPONCE_DOES_NOT_EXISTS_ERROR_MESSEGE, self::RESPONSE_STATUSES['BAD_REQUEST']);
+				}
+				$address = $this->getAddressFromResponce($response);
+				if (!isset($address[self::REGION_INGEX])) {
+					return response()->json(self::REGION_DOES_NOT_EXISTS_ERROR_MESSEGE, self::RESPONSE_STATUSES['NOT_FOUND']);
+				} else $regionName = $address[self::REGION_INGEX];
+				if (!isset($address[self::CITY_INDEX])) {
+					return response()->json(self::CITY_DOES_NOT_EXISTS_ERROR_MESSEGE, self::RESPONSE_STATUSES['NOT_FOUND']);
+				} else $cityName = $address[self::CITY_INDEX];
+				if (!isset($address[self::STREET_INDEX])) {
+					return response()->json(self::STREET_DOES_NOT_EXISTS_ERROR_MESSEGE, self::RESPONSE_STATUSES['NOT_FOUND']);
+				} else $street = $address[self::STREET_INDEX];
+				if (!isset($address[self::BUILDING_NUMBER_INDEX])) {
+					return response()->json(self::BUIILDING_NUMBER_DOES_NOT_EXISTS_ERROR_MESSEGE, self::RESPONSE_STATUSES['NOT_FOUND']);
+				} else $buildingNumber = $address[self::BUILDING_NUMBER_INDEX];
 				$location = new Location();
 				$cityExists = City::where('name', $cityName)->first();
 				if (!$cityExists) {
@@ -56,16 +81,16 @@ class LocationController extends Controller
 				}
 				$location->lat = $lat;
 				$location->lng = $lng;
-				$location->full_address = $response->raw()->address_components[self::STREET_INDEX]->long_name . ' ' . $response->raw()->address_components[self::BUILDING_NUMBER_INDEX]->long_name;
+				$location->full_address = $street . ' ' . $buildingNumber;
 				$location->save();
 				$result['response'] = $location;
-				$responseStatus = self::RESPONSE_STATUSES['CREATED'];
+				$result['status'] = self::RESPONSE_STATUSES['CREATED'];
 			} else {
 				$result['response'] = $locationExists;
-				$responseStatus = self::RESPONSE_STATUSES['OK'];
+				$result['status'] = self::RESPONSE_STATUSES['OK'];
 			}
 		}
-		return response()->json($result, $responseStatus);
+		return response()->json($result, $result['status']);
 	}
 
 	private function getFormattedJson($locations)
@@ -78,5 +103,14 @@ class LocationController extends Controller
 			'region' => $location->regions[0]->name,
 			'locations' => $locationArray
 		];
+	}
+
+	private function getAddressFromResponce($responce)
+	{
+		$data = array();
+		foreach ($responce->response->address_components as $element) {
+			$data[implode(' ', $element->types)] = $element->long_name;
+		}
+		return ($data);
 	}
 }
